@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const { ObjectId } = require('mongodb');
 
 const app = express();
 app.use(cors()); // Enable CORS for all routes
@@ -21,8 +22,8 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    await client.connect(); // Ensure the client connects to MongoDB
-    console.log("Pinged your deployment. You successfully connected to MongoDB!");
+    await client.connect();
+    console.log("Connected to MongoDB!");
 
     const database = client.db('productHuntDB');
     const collectionProducts = database.collection('products');
@@ -34,49 +35,20 @@ async function run() {
       res.send(result);
     });
 
+    // Get Products Endpoint
     app.get('/products', async (req, res) => {
-      const email = req.query.email; 
-     let query = {};
-      if (email) { query = { email: email };
-    } const result = await collectionProducts.find(query).toArray(); 
-    res.send(result); 
-   });
+      const products = await collectionProducts.find().toArray();
+      res.send(products);
+    });
 
-   app.get('/products/:id', async (req, res) => {
-    const id = req.params.id;
-    const query = { _id: new ObjectId(id) };
-    const result = await collectionProducts.findOne(query);
-    res.send(result);
-  });
-
-  app.put('/products/:id', async (req, res) => {
-    const id = req.params.id;
-    const filter = { _id: new ObjectId(id) };
-    const updateDoc = { $set: { ...req.body } };
-    delete updateDoc.$set._id; // Ensure _id is not modified
-
-    try {
-      const result = await collectionProducts.updateOne(filter, updateDoc);
+    // Delete Product Endpoint
+    app.delete('/products/:id', async (req, res) => {
+      const id = req.params.id;
+      const result = await collectionProducts.deleteOne({ _id: new ObjectId(id) });
       res.send(result);
-    } catch (error) {
-      res.status(500).send({ message: "Error updating visa", error });
-    }
-  });
-
-  app.delete('/products/:id', async (req, res) => {
-    console.log('going to delete', req.params.id);
-    const id = req.params.id;
-    const query = { _id: new ObjectId(id) }
-    const result = await collectionProducts.deleteOne(query);
-    res.send(result);
-  });
-    
-
-
-
+    });
   } finally {
-    // Ensures that the client will close when you finish/error
-    // await client.close();
+    // Do not close the client to keep the server running
   }
 }
 run().catch(console.dir);
