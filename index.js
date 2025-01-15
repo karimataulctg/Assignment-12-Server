@@ -48,6 +48,20 @@ async function run() {
     const result = await collectionProducts.findOne(query);
     res.send(result);
   });
+
+  app.put('/products/:id', async (req, res) => {
+    const id = req.params.id;
+    const filter = { _id: new ObjectId(id) };
+    const updateDoc = { $set: { ...req.body } };
+    delete updateDoc.$set._id; // Ensure _id is not modified
+
+    try {
+      const result = await collectionProducts.updateOne(filter, updateDoc);
+      res.send(result);
+    } catch (error) {
+      res.status(500).send({ message: "Error updating visa", error });
+    }
+  });
     
 
 
