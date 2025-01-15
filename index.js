@@ -62,6 +62,14 @@ async function run() {
       res.status(500).send({ message: "Error updating visa", error });
     }
   });
+
+  app.delete('/products/:id', async (req, res) => {
+    console.log('going to delete', req.params.id);
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) }
+    const result = await collectionProducts.deleteOne(query);
+    res.send(result);
+  });
     
 
 
