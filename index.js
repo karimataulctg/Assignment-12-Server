@@ -52,11 +52,20 @@ async function run() {
      //User Management 01
      app.post('/users', async (req, res) => {
       const newUser = req.body;
-      console.log('creating new user', newUser);
+      console.log('Adding new User', newUser);
       const result = await userCollection.insertOne(newUser);
       res.send(result);
     });
 
+    app.get('/users', async (req, res) => {
+      const email = req.query.email;
+      let query = {};
+      if (email) {
+        query = { email: email };
+      }
+      const users = await userCollection.find(query).toArray();
+      res.send(users);
+    });
 
 
   } finally {
