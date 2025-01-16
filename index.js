@@ -27,6 +27,7 @@ async function run() {
 
     const database = client.db('productHuntDB');
     const collectionProducts = database.collection('products');
+    const userCollection = client.db('productHuntDB').collection('users');
 
     // Add Product Endpoint
     app.post('/products', async (req, res) => {
@@ -47,6 +48,17 @@ async function run() {
       const result = await collectionProducts.deleteOne({ _id: new ObjectId(id) });
       res.send(result);
     });
+
+     //User Management 01
+     app.post('/users', async (req, res) => {
+      const newUser = req.body;
+      console.log('creating new user', newUser);
+      const result = await userCollection.insertOne(newUser);
+      res.send(result);
+    });
+
+
+
   } finally {
     // Do not close the client to keep the server running
   }
