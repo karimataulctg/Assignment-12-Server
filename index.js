@@ -40,6 +40,32 @@ async function run() {
     const reportsCollection = database.collection('reports');
     const cartCollection = database.collection('carts');
 
+
+    // Endpoint to get statistics
+app.get('/admin/statistics', async (req, res) => {
+  try {
+    const totalProducts = await collectionProducts.countDocuments({});
+    const acceptedProducts = await collectionProducts.countDocuments({ status: 'Accepted' });
+    const pendingProducts = await collectionProducts.countDocuments({ status: 'Pending' });
+    const totalReviews = await reviewsCollection.countDocuments({});
+    const totalUsers = await userCollection.countDocuments({});
+
+    const statistics = {
+      totalProducts,
+      acceptedProducts,
+      pendingProducts,
+      totalReviews,
+      totalUsers,
+    };
+
+    res.send(statistics);
+  } catch (error) {
+    console.error('Error fetching statistics:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+
     // Auth Routes
     app.post('/jwt', (req, res) => {
       const user = req.body;
@@ -193,6 +219,92 @@ async function run() {
       }
     });
 
+
+    // Update product status to "featured"
+app.put('/products/:id/feature', async (req, res) => {
+  const productId = req.params.id;
+
+  if (!ObjectId.isValid(productId)) {
+    return res.status(400).send({ message: 'Invalid product ID format' });
+  }
+
+  const result = await collectionProducts.updateOne(
+    { _id: new ObjectId(productId) },
+    { $set: { featured: true } }
+  );
+
+  result.modifiedCount
+    ? res.send({ message: 'Product marked as featured successfully' })
+    : res.status(404).send({ message: 'Product not found' });
+});
+
+// Update product status
+app.put('/products/:id/status', async (req, res) => {
+  const productId = req.params.id;
+  const { status } = req.body;
+
+  if (!ObjectId.isValid(productId)) {
+    return res.status(400).send({ message: 'Invalid product ID format' });
+  }
+
+  const result = await collectionProducts.updateOne(
+    { _id: new ObjectId(productId) },
+    { $set: { status } }
+  );
+
+  result.modifiedCount
+    ? res.send({ message: `Product status updated to ${status}` })
+    : res.status(404).send({ message: 'Product not found' });
+});
+
+
+// Fetch reported products
+app.get('/reported-products', async (req, res) => {
+  try {
+    const reportedProducts = await collectionProducts.find({ reported: true }).toArray();
+    res.send(reportedProducts);
+  } catch (error) {
+    console.error('Error fetching reported products:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// Delete reported product
+app.delete('/products/:id', async (req, res) => {
+  const productId = req.params.id;
+
+  if (!ObjectId.isValid(productId)) {
+    return res.status(400).send({ message: 'Invalid product ID format' });
+  }
+
+  const result = await collectionProducts.deleteOne({ _id: new ObjectId(productId) });
+
+  result.deletedCount
+    ? res.send({ message: 'Product deleted successfully' })
+    : res.status(404).send({ message: 'Product not found' });
+});
+
+
+// Report product
+app.post('/products/:id/report', async (req, res) => {
+  const productId = req.params.id;
+  const { userId, reason } = req.body;
+
+  if (!ObjectId.isValid(productId)) {
+    return res.status(400).send({ message: 'Invalid product ID format' });
+  }
+
+  const result = await collectionProducts.updateOne(
+    { _id: new ObjectId(productId) },
+    { $set: { reported: true }, $push: { reports: { userId, reason, reportedAt: new Date() } } }
+  );
+
+  result.modifiedCount
+    ? res.send({ message: 'Product reported successfully' })
+    : res.status(404).send({ message: 'Product not found' });
+});
+
+
     // Add Review Endpoint
     app.post('/reviews', async (req, res) => {
       const newReview = req.body;
@@ -310,3 +422,7 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
+
+
+
+
