@@ -38,32 +38,146 @@ async function run() {
     const userCollection = database.collection('users');
     const reviewsCollection = database.collection('reviews');
     const reportsCollection = database.collection('reports');
-    const cartCollection = database.collection('carts');
+    const couponsCollection = database.collection('coupons');
+
 
 
     // Endpoint to get statistics
-app.get('/admin/statistics', async (req, res) => {
+    app.get('/admin/statistics', async (req, res) => {
+      try {
+        const totalProducts = await collectionProducts.countDocuments({});
+        const acceptedProducts = await collectionProducts.countDocuments({ status: 'Accepted' });
+        const pendingProducts = await collectionProducts.countDocuments({ status: 'Pending' });
+        const totalReviews = await reviewsCollection.countDocuments({});
+        const totalUsers = await userCollection.countDocuments({});
+
+        const statistics = {
+          totalProducts,
+          acceptedProducts,
+          pendingProducts,
+          totalReviews,
+          totalUsers,
+        };
+
+        res.send(statistics);
+      } catch (error) {
+        console.error('Error fetching statistics:', error);
+        res.status(500).json({ message: 'Internal server error' });
+      }
+    });
+
+    // Endpoint to add a coupon
+  app.post('/coupons', async (req, res) => {
+    const { code, expiryDate, description, discountAmount } = req.body;
+
+    if (!code || !expiryDate || !description || !discountAmount) {
+      return res.status(400).json({ message: 'All fields are required' });
+    }
+
+    try {
+      const newCoupon = {
+        code,
+        expiryDate: new Date(expiryDate),
+        description,
+        discountAmount: parseFloat(discountAmount),
+      };
+
+      const result = await couponsCollection.insertOne(newCoupon);
+
+      if (result.insertedCount === 1) {
+        res.status(201).json({ message: 'Coupon added successfully', coupon: newCoupon });
+      } else {
+        res.status(500).json({ message: 'Failed to add coupon' });
+      }
+    } catch (error) {
+      console.error('Error adding coupon:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+
+
+    app.get('/coupons', async (req, res) => {
+      try {
+        const coupons = await couponsCollection.find({}).toArray();
+        res.send(coupons);
+      } catch (error) {
+        console.error('Error fetching coupons:', error);
+        res.status(500).json({ message: 'Internal server error' });
+      }
+    });
+
+    app.put('/coupons/:id', async (req, res) => {
+      const couponId = req.params.id;
+      const { code, expiryDate, description, discountAmount } = req.body;
+
+      if (!ObjectId.isValid(couponId)) {
+        return res.status(400).send({ message: 'Invalid coupon ID format' });
+      }
+
+      try {
+        const result = await couponsCollection.updateOne(
+          { _id: new ObjectId(couponId) },
+          { $set: { code, expiryDate, description, discountAmount } }
+        );
+        res.send({ message: 'Coupon updated successfully' });
+      } catch (error) {
+        console.error('Error updating coupon:', error);
+        res.status(500).json({ message: 'Internal server error' });
+      }
+    });
+
+    app.delete('/coupons/:id', async (req, res) => {
+      const couponId = req.params.id;
+
+      if (!ObjectId.isValid(couponId)) {
+        return res.status(400).send({ message: 'Invalid coupon ID format' });
+      }
+
+      try {
+        const result = await couponsCollection.deleteOne({ _id: new ObjectId(couponId) });
+        res.send({ message: 'Coupon deleted successfully' });
+      } catch (error) {
+        console.error('Error deleting coupon:', error);
+        res.status(500).json({ message: 'Internal server error' });
+      }
+    });
+
+    // Endpoint to get valid coupons
+app.get('/coupons/valid', async (req, res) => {
   try {
-    const totalProducts = await collectionProducts.countDocuments({});
-    const acceptedProducts = await collectionProducts.countDocuments({ status: 'Accepted' });
-    const pendingProducts = await collectionProducts.countDocuments({ status: 'Pending' });
-    const totalReviews = await reviewsCollection.countDocuments({});
-    const totalUsers = await userCollection.countDocuments({});
-
-    const statistics = {
-      totalProducts,
-      acceptedProducts,
-      pendingProducts,
-      totalReviews,
-      totalUsers,
-    };
-
-    res.send(statistics);
+    const currentDate = new Date();
+    const validCoupons = await couponsCollection.find({ expiryDate: { $gte: currentDate } }).toArray();
+    res.send(validCoupons);
   } catch (error) {
-    console.error('Error fetching statistics:', error);
+    console.error('Error fetching valid coupons:', error);
     res.status(500).json({ message: 'Internal server error' });
   }
 });
+
+
+// Endpoint to validate and apply coupon
+app.post('/apply-coupon', async (req, res) => {
+  const { code } = req.body;
+
+  if (!code) {
+    return res.status(400).json({ message: 'Coupon code is required' });
+  }
+
+  try {
+    const currentDate = new Date();
+    const coupon = await couponsCollection.findOne({ code, expiryDate: { $gte: currentDate } });
+
+    if (!coupon) {
+      return res.status(404).json({ message: 'Invalid or expired coupon' });
+    }
+
+    res.json({ message: 'Coupon applied successfully', discountAmount: coupon.discountAmount });
+  } catch (error) {
+    console.error('Error applying coupon:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 
 
     // Auth Routes
@@ -221,88 +335,88 @@ app.get('/admin/statistics', async (req, res) => {
 
 
     // Update product status to "featured"
-app.put('/products/:id/feature', async (req, res) => {
-  const productId = req.params.id;
+    app.put('/products/:id/feature', async (req, res) => {
+      const productId = req.params.id;
 
-  if (!ObjectId.isValid(productId)) {
-    return res.status(400).send({ message: 'Invalid product ID format' });
-  }
+      if (!ObjectId.isValid(productId)) {
+        return res.status(400).send({ message: 'Invalid product ID format' });
+      }
 
-  const result = await collectionProducts.updateOne(
-    { _id: new ObjectId(productId) },
-    { $set: { featured: true } }
-  );
+      const result = await collectionProducts.updateOne(
+        { _id: new ObjectId(productId) },
+        { $set: { featured: true } }
+      );
 
-  result.modifiedCount
-    ? res.send({ message: 'Product marked as featured successfully' })
-    : res.status(404).send({ message: 'Product not found' });
-});
+      result.modifiedCount
+        ? res.send({ message: 'Product marked as featured successfully' })
+        : res.status(404).send({ message: 'Product not found' });
+    });
 
-// Update product status
-app.put('/products/:id/status', async (req, res) => {
-  const productId = req.params.id;
-  const { status } = req.body;
+    // Update product status
+    app.put('/products/:id/status', async (req, res) => {
+      const productId = req.params.id;
+      const { status } = req.body;
 
-  if (!ObjectId.isValid(productId)) {
-    return res.status(400).send({ message: 'Invalid product ID format' });
-  }
+      if (!ObjectId.isValid(productId)) {
+        return res.status(400).send({ message: 'Invalid product ID format' });
+      }
 
-  const result = await collectionProducts.updateOne(
-    { _id: new ObjectId(productId) },
-    { $set: { status } }
-  );
+      const result = await collectionProducts.updateOne(
+        { _id: new ObjectId(productId) },
+        { $set: { status } }
+      );
 
-  result.modifiedCount
-    ? res.send({ message: `Product status updated to ${status}` })
-    : res.status(404).send({ message: 'Product not found' });
-});
-
-
-// Fetch reported products
-app.get('/reported-products', async (req, res) => {
-  try {
-    const reportedProducts = await collectionProducts.find({ reported: true }).toArray();
-    res.send(reportedProducts);
-  } catch (error) {
-    console.error('Error fetching reported products:', error);
-    res.status(500).json({ message: 'Internal server error' });
-  }
-});
-
-// Delete reported product
-app.delete('/products/:id', async (req, res) => {
-  const productId = req.params.id;
-
-  if (!ObjectId.isValid(productId)) {
-    return res.status(400).send({ message: 'Invalid product ID format' });
-  }
-
-  const result = await collectionProducts.deleteOne({ _id: new ObjectId(productId) });
-
-  result.deletedCount
-    ? res.send({ message: 'Product deleted successfully' })
-    : res.status(404).send({ message: 'Product not found' });
-});
+      result.modifiedCount
+        ? res.send({ message: `Product status updated to ${status}` })
+        : res.status(404).send({ message: 'Product not found' });
+    });
 
 
-// Report product
-app.post('/products/:id/report', async (req, res) => {
-  const productId = req.params.id;
-  const { userId, reason } = req.body;
+    // Fetch reported products
+    app.get('/reported-products', async (req, res) => {
+      try {
+        const reportedProducts = await collectionProducts.find({ reported: true }).toArray();
+        res.send(reportedProducts);
+      } catch (error) {
+        console.error('Error fetching reported products:', error);
+        res.status(500).json({ message: 'Internal server error' });
+      }
+    });
 
-  if (!ObjectId.isValid(productId)) {
-    return res.status(400).send({ message: 'Invalid product ID format' });
-  }
+    // Delete reported product
+    app.delete('/products/:id', async (req, res) => {
+      const productId = req.params.id;
 
-  const result = await collectionProducts.updateOne(
-    { _id: new ObjectId(productId) },
-    { $set: { reported: true }, $push: { reports: { userId, reason, reportedAt: new Date() } } }
-  );
+      if (!ObjectId.isValid(productId)) {
+        return res.status(400).send({ message: 'Invalid product ID format' });
+      }
 
-  result.modifiedCount
-    ? res.send({ message: 'Product reported successfully' })
-    : res.status(404).send({ message: 'Product not found' });
-});
+      const result = await collectionProducts.deleteOne({ _id: new ObjectId(productId) });
+
+      result.deletedCount
+        ? res.send({ message: 'Product deleted successfully' })
+        : res.status(404).send({ message: 'Product not found' });
+    });
+
+
+    // Report product
+    app.post('/products/:id/report', async (req, res) => {
+      const productId = req.params.id;
+      const { userId, reason } = req.body;
+
+      if (!ObjectId.isValid(productId)) {
+        return res.status(400).send({ message: 'Invalid product ID format' });
+      }
+
+      const result = await collectionProducts.updateOne(
+        { _id: new ObjectId(productId) },
+        { $set: { reported: true }, $push: { reports: { userId, reason, reportedAt: new Date() } } }
+      );
+
+      result.modifiedCount
+        ? res.send({ message: 'Product reported successfully' })
+        : res.status(404).send({ message: 'Product not found' });
+    });
 
 
     // Add Review Endpoint
@@ -369,6 +483,21 @@ app.post('/products/:id/report', async (req, res) => {
 
 
 
+  // Endpoint to check if a user is an admin
+  app.get('/users/admin/:email', async (req, res) => {
+    const email = req.params.email;
+    try {
+      const user = await userCollection.findOne({ email });
+      if (user && user.role === 'admin') {
+        res.json({ admin: true });
+      } else {
+        res.json({ admin: false });
+      }
+    } catch (error) {
+      console.error('Error fetching user:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
 
     app.patch('/users/admin/:id', async (req, res) => {
       const id = req.params.id;
@@ -404,6 +533,58 @@ app.post('/products/:id/report', async (req, res) => {
       }
     });
 
+    // Endpoint to promote a user to moderator
+  app.patch('/users/moderator/:id', async (req, res) => {
+    const userId = req.params.id;
+
+    if (!ObjectId.isValid(userId)) {
+      return res.status(400).send({ message: 'Invalid user ID format' });
+    }
+
+    try {
+      const result = await userCollection.updateOne(
+        { _id: new ObjectId(userId) },
+        { $set: { role: 'moderator' } }
+      );
+
+      if (result.modifiedCount > 0) {
+        res.json({ message: 'User promoted to moderator successfully' });
+      } else {
+        res.status(404).json({ message: 'User not found' });
+      }
+    } catch (error) {
+      console.error('Error promoting user to moderator:', error);
+      res.status(500).json({ message: 'Internal server error' });
+    }
+  });
+
+   // Endpoint to update user subscription status
+   app.patch('/users/subscribe/:id', async (req, res) => {
+    const userId = req.params.id;
+
+    if (!ObjectId.isValid(userId)) {
+        return res.status(400).send({ message: 'Invalid user ID format' });
+    }
+
+    try {
+        const result = await userCollection.updateOne(
+            { _id: new ObjectId(userId) },
+            { $set: { subscriptionStatus: 'verified' } } // Store verified status
+        );
+
+        if (result.modifiedCount > 0) {
+            res.json({ message: 'User subscription status updated successfully' });
+        } else {
+            res.status(404).json({ message: 'User not found' });
+        }
+    } catch (error) {
+        console.error('Error updating subscription status:', error);
+        res.status(500).json({ message: 'Internal server error' });
+    }
+});
+
+
+
     app.get('/users/role/:email', async (req, res) => {
       const user = await userCollection.findOne({ email: req.params.email });
       res.json({ role: user?.role || "user" });
@@ -422,6 +603,30 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
+
+
+
+
+
+
+
+
+
+
+ 
+ 
+
+
+  
+
+
+
+
+
+
+
+  
+  
 
 
 
