@@ -95,6 +95,19 @@ async function run() {
     }
   });
 
+  app.get("/carts", async (req, res) => {
+    const email = req.query.email;
+    if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+    }
+    const cartItems = await database.collection("carts").find({ userEmail: email }).toArray();
+    if (!cartItems.length) {
+        return res.status(404).json({ message: "No cart items found" });
+    }
+    res.json(cartItems);
+});
+
+
 
     app.get('/coupons', async (req, res) => {
       try {
@@ -183,7 +196,7 @@ app.post('/apply-coupon', async (req, res) => {
     // Auth Routes
     app.post('/jwt', (req, res) => {
       const user = req.body;
-      const token = jwt.sign(user, process.env.ACCESS_TOKEN, { expiresIn: '5h' });
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN, { expiresIn: '10h' });
       res.cookie("token", token).send({ success: true });
     });
 
@@ -198,24 +211,6 @@ app.post('/apply-coupon', async (req, res) => {
       res.send(result);
     });
 
-    // app.get('/products', async (req, res) => {
-    //   const { userId, featured } = req.query;
-    //   let query = {};
-
-    //   if (userId) {
-    //     if (!ObjectId.isValid(userId)) {
-    //       return res.status(400).send({ message: 'Invalid user ID format' });
-    //     }
-    //     query.owner = new ObjectId(userId);
-    //   }
-
-    //   if (featured) {
-    //     query.featured = featured === 'true';
-    //   }
-
-    //   const products = await collectionProducts.find(query).toArray();
-    //   res.send(products);
-    // });
     app.get('/products', async (req, res) => {
       const { userId, featured, tag } = req.query;
       console.log("Received Query Parameters:", req.query); // 🛠 Debugging line
