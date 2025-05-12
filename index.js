@@ -12,9 +12,10 @@ const port = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-  origin: 'https://product-hunt-a156b.web.app',
-  credentials: true
+  origin: ['http://localhost:5173', 'https://product-hunt-a156b.web.app']
 }));
+
+
 app.use(express.json()); // Parse JSON body
 
 // MongoDB Connection
