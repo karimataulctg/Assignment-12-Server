@@ -11,8 +11,12 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 // Middleware
+
 app.use(cors({
-  origin: ['http://localhost:5173', 'https://product-hunt-a156b.web.app']
+  origin: ['http://localhost:5174', 'https://product-hunt-a156b.web.app'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 }));
 
 
@@ -44,29 +48,48 @@ async function run() {
 
 
     // Endpoint to get statistics
-    app.get('/admin/statistics', async (req, res) => {
-      try {
-        const totalProducts = await collectionProducts.countDocuments({});
-        const acceptedProducts = await collectionProducts.countDocuments({ status: 'Accepted' });
-        const pendingProducts = await collectionProducts.countDocuments({ status: 'Pending' });
-        const totalReviews = await reviewsCollection.countDocuments({});
-        const totalUsers = await userCollection.countDocuments({});
+   app.get('/admin/statistics', async (req, res) => {
+  try {
+    // Product Statistics
+    const totalProducts = await collectionProducts.countDocuments({});
+    const acceptedProducts = await collectionProducts.countDocuments({ status: 'Accepted' });
+    const pendingProducts = await collectionProducts.countDocuments({ status: 'Pending' });
 
-        const statistics = {
-          totalProducts,
-          acceptedProducts,
-          pendingProducts,
-          totalReviews,
-          totalUsers,
-        };
+    // Review Statistics
+    const totalReviews = await reviewsCollection.countDocuments({});
 
-        res.send(statistics);
-      } catch (error) {
-        console.error('Error fetching statistics:', error);
-        res.status(500).json({ message: 'Internal server error' });
-      }
+    // User Statistics
+    const totalUsers = await userCollection.countDocuments({});
+    const creatorsCount = await userCollection.countDocuments({ 
+      role: { $regex: /^creator$/i } 
     });
 
+    // Upvotes Calculation
+    const upvotesResult = await collectionProducts.aggregate([
+      {
+        $group: {
+          _id: null,
+          total: { $sum: { $size: "$upvotedBy" } }
+        }
+      }
+    ]).toArray();
+
+    const statistics = {
+      totalProducts,
+      acceptedProducts,
+      pendingProducts,
+      totalReviews,
+      totalUsers,
+      creatorsCount,  // Separate from totalUsers for clarity
+      upvotes: upvotesResult[0]?.total || 0
+    };
+
+    res.send(statistics);
+  } catch (error) {
+    console.error('Error fetching statistics:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
     // Endpoint to add a coupon
   app.post('/coupons', async (req, res) => {
     const { code, expiryDate, description, discountAmount } = req.body;
@@ -579,8 +602,6 @@ app.post('/apply-coupon', async (req, res) => {
     }
 });
 
-
-
     app.get('/users/role/:email', async (req, res) => {
       const user = await userCollection.findOne({ email: req.params.email });
       res.json({ role: user?.role || "user" });
@@ -599,31 +620,3 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
-
-
-
-
-
-
-
-
-
-
- 
- 
-
-
-  
-
-
-
-
-
-
-
-  
-  
-
-
-
-
